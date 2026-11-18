@@ -21,9 +21,20 @@ app = FastAPI(
     description="Gemini API + Google Workspace (Gmail, Drive, Sheets) End-to-End Inbox Operations Triage",
 )
 
+cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://opstriage-ai.vercel.app",
+]
+if settings.FRONTEND_URL:
+    clean_front = settings.FRONTEND_URL.rstrip("/")
+    if clean_front not in cors_origins:
+        cors_origins.append(clean_front)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

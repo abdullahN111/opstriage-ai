@@ -5,6 +5,7 @@ import re
 import threading
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from .config import settings
