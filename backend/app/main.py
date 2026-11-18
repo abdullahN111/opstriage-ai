@@ -125,16 +125,19 @@ def google_oauth_callback(
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
 ):
+    base_frontend = settings.FRONTEND_URL.rstrip("/")
     if error or not code:
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}?oauth=error&reason={error or 'missing_code'}"
+            url=f"{base_frontend}/?oauth=error&reason={error or 'missing_code'}"
         )
     try:
         workspace_service.handle_oauth_callback(code=code, state=state)
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}?mode=live&oauth=connected")
+        return RedirectResponse(url=f"{base_frontend}/?mode=live&oauth=connected")
     except Exception as exc:
+        import traceback
+        traceback.print_exc()
         return RedirectResponse(
-            url=f"{settings.FRONTEND_URL}?oauth=error&reason={str(exc)[:120]}"
+            url=f"{base_frontend}/?oauth=error&reason={str(exc)[:120]}"
         )
 
 

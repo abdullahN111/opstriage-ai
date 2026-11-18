@@ -47,19 +47,29 @@ class WorkspaceService:
     # OAuth & Mode Management
     # ------------------------------------------------------------------
     def get_credentials(self) -> Optional[Any]:
-        if not GOOGLE_LIBS_AVAILABLE or not settings.TOKEN_PATH.exists():
+        if getattr(self, "_cached_credentials", None) and self._cached_credentials.valid:
+            return self._cached_credentials
+        if not GOOGLE_LIBS_AVAILABLE:
             return None
-        try:
-            creds = Credentials.from_authorized_user_file(
-                str(settings.TOKEN_PATH), settings.GOOGLE_SCOPES
-            )
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-                settings.TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
-            if creds and creds.valid:
-                return creds
-        except Exception:
-            return None
+        candidate_paths = [settings.TOKEN_PATH, Path("/tmp/token.json")]
+        for tp in candidate_paths:
+            if not tp.exists():
+                continue
+            try:
+                creds = Credentials.from_authorized_user_file(
+                    str(tp), settings.GOOGLE_SCOPES
+                )
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                    try:
+                        tp.write_text(creds.to_json(), encoding="utf-8")
+                    except Exception:
+                        pass
+                if creds and creds.valid:
+                    self._cached_credentials = creds
+                    return creds
+            except Exception:
+                continue
         return None
 
     def is_live_authenticated(self) -> bool:
@@ -103,13 +113,13 @@ class WorkspaceService:
             scopes=settings.GOOGLE_SCOPES,
             redirect_uri=settings.GOOGLE_REDIRECT_URI,
         )
+        flow.autogenerate_code_verifier = False
         auth_url, state = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
             login_hint=settings.ADMIN_EMAIL,
         )
-        self._oauth_states[state] = getattr(flow, "code_verifier", "") or ""
         return auth_url
 
     def handle_oauth_callback(self, code: str, state: Optional[str] = None) -> None:
@@ -128,8 +138,7 @@ class WorkspaceService:
             redirect_uri=settings.GOOGLE_REDIRECT_URI,
             state=state,
         )
-        if state and state in self._oauth_states and self._oauth_states[state]:
-            flow.code_verifier = self._oauth_states.pop(state)
+        flow.autogenerate_code_verifier = False
         flow.fetch_token(code=code)
         creds = flow.credentials
 
@@ -149,7 +158,16 @@ class WorkspaceService:
                     f"Signed in as {auth_email}. Please explore OpsTriage AI in Live Sandbox Mode."
                 )
 
-        settings.TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
+        self._cached_credentials = creds
+        saved = False
+        for p in [settings.TOKEN_PATH, Path("/tmp/token.json")]:
+            try:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(creds.to_json(), encoding="utf-8")
+                saved = True
+                break
+            except Exception:
+                continue
         self.mode = "live"
         # Pre-load live inbox so it is ready immediately
         try:

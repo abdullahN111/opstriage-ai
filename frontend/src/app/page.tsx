@@ -303,7 +303,16 @@ export default function OpsTriageCommandCenter() {
           document.title,
           window.location.pathname,
         );
-        fetchAllData();
+        // Explicitly set live mode on the backend and load data
+        fetch(`${API_BASE}/api/mode`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "live" }),
+        })
+          .catch((err) => console.warn("Failed to set mode=live:", err))
+          .finally(() => {
+            fetchAllData();
+          });
       } else if (oauthErr) {
         const reason =
           params.get("reason") || "OAuth authorization was denied or failed.";
