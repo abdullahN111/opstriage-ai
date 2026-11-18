@@ -123,14 +123,20 @@ function cleanEmailDisplay(raw?: string): string {
   if (/<[a-z][\s\S]*>/i.test(text)) {
     text = text.replace(/<(script|style|head)[^>]*>[\s\S]*?<\/\1>/gi, "");
     text = text.replace(/<br\s*\/?>/gi, "\n");
-    text = text.replace(/<\/?(p|div|tr|li|h[1-6]|table|blockquote)[^>]*>/gi, "\n");
-    text = text.replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi, (_, href, label) => {
-      const cleanLabel = label.replace(/<[^>]+>/g, "").trim();
-      if (!cleanLabel || cleanLabel.toLowerCase() === href.toLowerCase()) {
-        return href.length < 50 ? href : "[link]";
-      }
-      return `${cleanLabel} (${href.length < 60 ? href : "[link]"})`;
-    });
+    text = text.replace(
+      /<\/?(p|div|tr|li|h[1-6]|table|blockquote)[^>]*>/gi,
+      "\n",
+    );
+    text = text.replace(
+      /<a\s+(?:[^>]*?\s+)?href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gi,
+      (_, href, label) => {
+        const cleanLabel = label.replace(/<[^>]+>/g, "").trim();
+        if (!cleanLabel || cleanLabel.toLowerCase() === href.toLowerCase()) {
+          return href.length < 50 ? href : "[link]";
+        }
+        return `${cleanLabel} (${href.length < 60 ? href : "[link]"})`;
+      },
+    );
     text = text.replace(/<[^>]+>/g, " ");
   }
   text = text
@@ -145,12 +151,18 @@ function cleanEmailDisplay(raw?: string): string {
   const cleanLines: string[] = [];
   for (const line of lines) {
     if (line) {
-      if ((line.startsWith("http://") || line.startsWith("https://")) && line.length > 80) {
+      if (
+        (line.startsWith("http://") || line.startsWith("https://")) &&
+        line.length > 80
+      ) {
         cleanLines.push(line.slice(0, 60) + "... [link]");
       } else {
         cleanLines.push(line);
       }
-    } else if (cleanLines.length > 0 && cleanLines[cleanLines.length - 1] !== "") {
+    } else if (
+      cleanLines.length > 0 &&
+      cleanLines[cleanLines.length - 1] !== ""
+    ) {
       cleanLines.push("");
     }
   }
@@ -161,10 +173,10 @@ export default function OpsTriageCommandCenter() {
   const [mode, setMode] = useState<WorkspaceMode>("sandbox");
   const [oauthConnected, setOauthConnected] = useState(false);
   const [driveFolderUrl, setDriveFolderUrl] = useState(
-    "https://drive.google.com/drive/u/0/folders/1MJ11K1jCYC_RkQ6DejdrkAmxUXTb_qVU"
+    "https://drive.google.com/drive/u/0/folders/1MJ11K1jCYC_RkQ6DejdrkAmxUXTb_qVU",
   );
   const [sheetUrl, setSheetUrl] = useState(
-    "https://docs.google.com/spreadsheets/d/1mEVTzPE9fQxoQP78hJsiSPq6uucLyy_m_1cOJkJwqek/edit#gid=0"
+    "https://docs.google.com/spreadsheets/d/1mEVTzPE9fQxoQP78hJsiSPq6uucLyy_m_1cOJkJwqek/edit#gid=0",
   );
 
   const [inquiries, setInquiries] = useState<InboundInquiry[]>([]);
@@ -182,7 +194,9 @@ export default function OpsTriageCommandCenter() {
   const [selectedId, setSelectedId] = useState<string>("inq-1001");
   const [statusFilter, setStatusFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
+  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>(
+    {},
+  );
   const [showOriginalEmail, setShowOriginalEmail] = useState<boolean>(true);
 
   // Right Drawer states
@@ -208,13 +222,15 @@ export default function OpsTriageCommandCenter() {
 
   // New custom inquiry form
   const [newSubject, setNewSubject] = useState(
-    "CRITICAL: Enterprise Invoice #INV-2026-9910 Overbilling ($18,200.00)"
+    "CRITICAL: Enterprise Invoice #INV-2026-9910 Overbilling ($18,200.00)",
   );
   const [newSenderName, setNewSenderName] = useState("Sophia Chen");
-  const [newSenderEmail, setNewSenderEmail] = useState("s.chen@nexus-robotics.ai");
+  const [newSenderEmail, setNewSenderEmail] = useState(
+    "s.chen@nexus-robotics.ai",
+  );
   const [newOrg, setNewOrg] = useState("Nexus Robotics Corp");
   const [newBody, setNewBody] = useState(
-    "Hi Operations & Billing Team,\n\nWe noticed an unexpected duplicate wire charge of $18,200.00 USD on Invoice #INV-2026-9910 (Wire Ref #ACH-77123). Our fiscal quarter closes on 2026-11-20. Please issue a Credit Memo and initiate an expedited refund per our enterprise agreement.\n\nBest,\nSophia Chen\nVP Finance, Nexus Robotics Corp"
+    "Hi Operations & Billing Team,\n\nWe noticed an unexpected duplicate wire charge of $18,200.00 USD on Invoice #INV-2026-9910 (Wire Ref #ACH-77123). Our fiscal quarter closes on 2026-11-20. Please issue a Credit Memo and initiate an expedited refund per our enterprise agreement.\n\nBest,\nSophia Chen\nVP Finance, Nexus Robotics Corp",
   );
 
   const selectedInquiry =
@@ -247,7 +263,7 @@ export default function OpsTriageCommandCenter() {
         const data = await inqRes.json();
         const rawList: InboundInquiry[] = data.inquiries || [];
         const uniqueInquiries = Array.from(
-          new Map(rawList.map((item) => [item.id, item])).values()
+          new Map(rawList.map((item) => [item.id, item])).values(),
         );
         setInquiries(uniqueInquiries);
         if (data.kpis) setKpis(data.kpis);
@@ -256,7 +272,7 @@ export default function OpsTriageCommandCenter() {
         const rData = await rowsRes.json();
         const rawRows: TrackingRow[] = rData.rows || [];
         const uniqueRows = Array.from(
-          new Map(rawRows.map((r) => [r.row_id, r])).values()
+          new Map(rawRows.map((r) => [r.row_id, r])).values(),
         );
         setTrackingRows(uniqueRows);
       }
@@ -282,13 +298,21 @@ export default function OpsTriageCommandCenter() {
         setMode("live");
         setOauthConnected(true);
         showToast(`Connected to Live Google Workspace (${adminEmail})`);
-        window.history.replaceState({}, document.title, window.location.pathname);
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname,
+        );
         fetchAllData();
       } else if (oauthErr) {
         const reason =
           params.get("reason") || "OAuth authorization was denied or failed.";
         showToast(`OAuth Notice: ${reason}`);
-        window.history.replaceState({}, document.title, window.location.pathname);
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname,
+        );
       }
     }
   }, [adminEmail, fetchAllData, showToast]);
@@ -296,10 +320,14 @@ export default function OpsTriageCommandCenter() {
   useEffect(() => {
     if (selectedInquiry) {
       setEditableDraft(
-        selectedInquiry.sent_reply || selectedInquiry.draft_reply || ""
+        selectedInquiry.sent_reply || selectedInquiry.draft_reply || "",
       );
     }
-  }, [selectedInquiry?.id, selectedInquiry?.draft_reply, selectedInquiry?.sent_reply]);
+  }, [
+    selectedInquiry?.id,
+    selectedInquiry?.draft_reply,
+    selectedInquiry?.sent_reply,
+  ]);
 
   const handleToggleMode = async (targetMode: WorkspaceMode) => {
     if (targetMode === "live" && !oauthConnected && !isAdminUnlocked) {
@@ -319,8 +347,8 @@ export default function OpsTriageCommandCenter() {
           targetMode === "sandbox"
             ? "Live Sandbox Mode active (pre-loaded enterprise inquiries)"
             : oauthConnected
-            ? `Live Google Workspace active (${adminEmail})`
-            : "Live Mode selected — click 'Connect Google' to authorize"
+              ? `Live Google Workspace active (${adminEmail})`
+              : "Live Mode selected — click 'Connect Google' to authorize",
         );
       }
     } catch (e) {
@@ -341,11 +369,13 @@ export default function OpsTriageCommandCenter() {
         setIsAdminUnlocked(true);
         setShowAdminModal(false);
         setAdminPasskeyError("");
-        showToast(`Administrator verified. Connecting Google for ${adminEmail}...`);
+        showToast(
+          `Administrator verified. Connecting Google for ${adminEmail}...`,
+        );
         handleConnectGoogleOAuth();
       } else {
         const errData = await res.json().catch(() => null);
-        const errMsg = errData?.detail || "Incorrect passkey. Default is admin123.";
+        const errMsg = errData?.detail || "Incorrect passkey.";
         setAdminPasskeyError(errMsg);
         showToast(errMsg);
       }
@@ -379,13 +409,13 @@ export default function OpsTriageCommandCenter() {
       prev.map((inq) =>
         inq.id === targetId
           ? { ...inq, status: "Triaging", execution_trace: [] }
-          : inq
-      )
+          : inq,
+      ),
     );
 
     try {
       const evtSource = new EventSource(
-        `${API_BASE}/api/inquiries/${targetId}/triage/stream`
+        `${API_BASE}/api/inquiries/${targetId}/triage/stream`,
       );
 
       const safetyTimer = setTimeout(async () => {
@@ -402,10 +432,10 @@ export default function OpsTriageCommandCenter() {
           prev.map((inq) => {
             if (inq.id !== targetId) return inq;
             const filtered = inq.execution_trace.filter(
-              (s) => s.step_number !== step.step_number
+              (s) => s.step_number !== step.step_number,
             );
             return { ...inq, execution_trace: [...filtered, step] };
-          })
+          }),
         );
       });
 
@@ -415,27 +445,30 @@ export default function OpsTriageCommandCenter() {
           prev.map((inq) => {
             if (inq.id !== targetId) return inq;
             const filtered = inq.execution_trace.filter(
-              (s) => s.step_number !== step.step_number
+              (s) => s.step_number !== step.step_number,
             );
             return { ...inq, execution_trace: [...filtered, step] };
-          })
+          }),
         );
       });
 
-      evtSource.addEventListener("triage.completed", async (e: MessageEvent) => {
-        clearTimeout(safetyTimer);
-        const updatedInquiry: InboundInquiry = JSON.parse(e.data);
-        setInquiries((prev) =>
-          prev.map((inq) => (inq.id === targetId ? updatedInquiry : inq))
-        );
-        setEditableDraft(updatedInquiry.draft_reply || "");
-        evtSource.close();
-        setIsTriaging(false);
-        await fetchAllData();
-        showToast(
-          `Triage complete — Logged Row #${updatedInquiry.sheet_row_number} to Google Sheet`
-        );
-      });
+      evtSource.addEventListener(
+        "triage.completed",
+        async (e: MessageEvent) => {
+          clearTimeout(safetyTimer);
+          const updatedInquiry: InboundInquiry = JSON.parse(e.data);
+          setInquiries((prev) =>
+            prev.map((inq) => (inq.id === targetId ? updatedInquiry : inq)),
+          );
+          setEditableDraft(updatedInquiry.draft_reply || "");
+          evtSource.close();
+          setIsTriaging(false);
+          await fetchAllData();
+          showToast(
+            `Triage complete — Logged Row #${updatedInquiry.sheet_row_number} to Google Sheet`,
+          );
+        },
+      );
 
       evtSource.onerror = async () => {
         clearTimeout(safetyTimer);
@@ -462,7 +495,7 @@ export default function OpsTriageCommandCenter() {
             instructions: regenPrompt,
             current_draft: editableDraft,
           }),
-        }
+        },
       );
       if (res.ok) {
         const data = await res.json();
@@ -470,8 +503,10 @@ export default function OpsTriageCommandCenter() {
         setEditableDraft(updatedDraft);
         setInquiries((prev) =>
           prev.map((i) =>
-            i.id === selectedInquiry.id ? { ...i, draft_reply: updatedDraft } : i
-          )
+            i.id === selectedInquiry.id
+              ? { ...i, draft_reply: updatedDraft }
+              : i,
+          ),
         );
         setRegenPrompt("");
         showToast("Email draft refined successfully.");
@@ -497,19 +532,19 @@ export default function OpsTriageCommandCenter() {
           body: JSON.stringify({
             final_reply_body: editableDraft,
           }),
-        }
+        },
       );
       if (res.ok) {
         const data = await res.json();
         setInquiries((prev) =>
-          prev.map((i) => (i.id === selectedInquiry.id ? data.inquiry : i))
+          prev.map((i) => (i.id === selectedInquiry.id ? data.inquiry : i)),
         );
         if (data.rows) setTrackingRows(data.rows);
         if (data.kpis) setKpis(data.kpis);
         showToast(
           `Email sent & Sheet Row #${
             selectedInquiry.sheet_row_number || 2
-          } marked Resolved`
+          } marked Resolved`,
         );
       }
     } finally {
@@ -549,16 +584,19 @@ export default function OpsTriageCommandCenter() {
     try {
       const res = await fetch(
         `${API_BASE}/api/inquiries/${selectedInquiry.id}/summarize`,
-        { method: "POST", signal: controller.signal }
+        { method: "POST", signal: controller.signal },
       );
       if (res.ok) {
         const data = await res.json();
         const textSummary: string = data.summary || "";
-        setSummaryMap((prev) => ({ ...prev, [selectedInquiry.id]: textSummary }));
+        setSummaryMap((prev) => ({
+          ...prev,
+          [selectedInquiry.id]: textSummary,
+        }));
         setInquiries((prev) =>
           prev.map((i) =>
-            i.id === selectedInquiry.id ? { ...i, ai_summary: textSummary } : i
-          )
+            i.id === selectedInquiry.id ? { ...i, ai_summary: textSummary } : i,
+          ),
         );
         showToast("Summary updated!");
       }
@@ -581,11 +619,13 @@ export default function OpsTriageCommandCenter() {
         const data = await res.json();
         const rawList: InboundInquiry[] = data.inquiries || [];
         const uniqueInquiries = Array.from(
-          new Map(rawList.map((item) => [item.id, item])).values()
+          new Map(rawList.map((item) => [item.id, item])).values(),
         );
         setInquiries(uniqueInquiries);
         if (data.kpis) setKpis(data.kpis);
-        showToast(`Synced ${uniqueInquiries.length} emails from your Gmail inbox!`);
+        showToast(
+          `Synced ${uniqueInquiries.length} emails from your Gmail inbox!`,
+        );
       }
     } catch {
       showToast("Could not sync Gmail inbox.");
@@ -595,7 +635,9 @@ export default function OpsTriageCommandCenter() {
   };
 
   const handleResetSandbox = async () => {
-    const res = await fetch(`${API_BASE}/api/sandbox/reset`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/api/sandbox/reset`, {
+      method: "POST",
+    });
     if (res.ok) {
       await fetchAllData();
       setSelectedId("inq-1001");
@@ -604,8 +646,7 @@ export default function OpsTriageCommandCenter() {
   };
 
   const filteredInquiries = inquiries.filter((inq) => {
-    const matchesStatus =
-      statusFilter === "All" || inq.status === statusFilter;
+    const matchesStatus = statusFilter === "All" || inq.status === statusFilter;
     const matchesSearch =
       !searchQuery.trim() ||
       inq.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -621,8 +662,8 @@ export default function OpsTriageCommandCenter() {
       short === "P0"
         ? "bg-red-500/15 text-red-400 border-red-500/30"
         : short === "P1"
-        ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-        : "bg-slate-800 text-slate-300 border-slate-700";
+          ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+          : "bg-slate-800 text-slate-300 border-slate-700";
     return (
       <span
         className={`text-[11px] font-medium px-1.5 py-0.5 rounded border ${styles}`}
@@ -660,7 +701,8 @@ export default function OpsTriageCommandCenter() {
           {/* Inline Minimal KPI Bar */}
           <div className="hidden xl:flex items-center gap-4 text-xs text-slate-400 border-l border-slate-800 pl-6">
             <span>
-              Queue: <strong className="text-slate-200">{kpis.total_inquiries}</strong>
+              Queue:{" "}
+              <strong className="text-slate-200">{kpis.total_inquiries}</strong>
             </span>
             <span>•</span>
             <span>
@@ -670,12 +712,16 @@ export default function OpsTriageCommandCenter() {
             <span>•</span>
             <span>
               Needs Approval:{" "}
-              <strong className="text-indigo-400">{kpis.needs_approval_count}</strong>
+              <strong className="text-indigo-400">
+                {kpis.needs_approval_count}
+              </strong>
             </span>
             <span>•</span>
             <span>
               Resolved:{" "}
-              <strong className="text-emerald-400">{kpis.resolved_count}</strong>
+              <strong className="text-emerald-400">
+                {kpis.resolved_count}
+              </strong>
             </span>
             <span>•</span>
             <span>
@@ -777,8 +823,12 @@ export default function OpsTriageCommandCenter() {
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition disabled:opacity-50"
                     title="Sync up to 50 latest emails directly from your Gmail inbox"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isSyncingGmail ? "animate-spin" : ""}`} />
-                    <span>{isSyncingGmail ? "Syncing..." : "Sync Gmail (50)"}</span>
+                    <RefreshCw
+                      className={`w-3 h-3 ${isSyncingGmail ? "animate-spin" : ""}`}
+                    />
+                    <span>
+                      {isSyncingGmail ? "Syncing..." : "Sync Gmail (50)"}
+                    </span>
                   </button>
                 ) : (
                   <>
@@ -851,8 +901,8 @@ export default function OpsTriageCommandCenter() {
                         inq.status === "Resolved"
                           ? "bg-emerald-500/10 text-emerald-400"
                           : inq.status === "Needs Approval"
-                          ? "bg-indigo-500/15 text-indigo-300"
-                          : "bg-amber-500/10 text-amber-300"
+                            ? "bg-indigo-500/15 text-indigo-300"
+                            : "bg-amber-500/10 text-amber-300"
                       }`}
                     >
                       {inq.status}
@@ -908,7 +958,8 @@ export default function OpsTriageCommandCenter() {
                     {selectedInquiry.subject}
                   </h1>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {selectedInquiry.sender_name} &lt;{selectedInquiry.sender_email}&gt;
+                    {selectedInquiry.sender_name} &lt;
+                    {selectedInquiry.sender_email}&gt;
                   </p>
                 </div>
 
@@ -965,7 +1016,12 @@ export default function OpsTriageCommandCenter() {
                       ) : (
                         <>
                           <Sparkles className="w-3 h-3 text-indigo-400" />
-                          <span>{(summaryMap[selectedInquiry.id] || selectedInquiry.ai_summary) ? "Re-Summarize" : "Summarize & Explain"}</span>
+                          <span>
+                            {summaryMap[selectedInquiry.id] ||
+                            selectedInquiry.ai_summary
+                              ? "Re-Summarize"
+                              : "Summarize & Explain"}
+                          </span>
                         </>
                       )}
                     </button>
@@ -974,17 +1030,21 @@ export default function OpsTriageCommandCenter() {
                   {showOriginalEmail && (
                     <div className="px-3.5 pb-3.5 pt-1 border-t border-slate-800/60 space-y-3">
                       {/* Highlighted AI Summary Callout in clear paragraph form */}
-                      {(summaryMap[selectedInquiry.id] || selectedInquiry.ai_summary) && (
+                      {(summaryMap[selectedInquiry.id] ||
+                        selectedInquiry.ai_summary) && (
                         <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-lg p-3 space-y-1.5">
                           <div className="flex items-center justify-between text-xs font-semibold text-indigo-300">
                             <span className="flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                               AI Email Summary & Explanation
                             </span>
-                            <span className="text-[10px] text-slate-400 font-normal">Gemini</span>
+                            <span className="text-[10px] text-slate-400 font-normal">
+                              Gemini
+                            </span>
                           </div>
                           <p className="text-xs text-indigo-100/90 leading-relaxed font-sans">
-                            {summaryMap[selectedInquiry.id] || selectedInquiry.ai_summary}
+                            {summaryMap[selectedInquiry.id] ||
+                              selectedInquiry.ai_summary}
                           </p>
                         </div>
                       )}
@@ -1021,7 +1081,8 @@ export default function OpsTriageCommandCenter() {
                           Deadline
                         </span>
                         <span className="font-mono text-slate-200">
-                          {selectedInquiry.entities.deadline_iso || "Standard SLA"}
+                          {selectedInquiry.entities.deadline_iso ||
+                            "Standard SLA"}
                         </span>
                       </div>
                       <div>
@@ -1029,7 +1090,8 @@ export default function OpsTriageCommandCenter() {
                           References
                         </span>
                         <span className="font-mono text-slate-200 truncate block">
-                          {selectedInquiry.entities.reference_ids.join(", ") || "—"}
+                          {selectedInquiry.entities.reference_ids.join(", ") ||
+                            "—"}
                         </span>
                       </div>
                     </div>
@@ -1061,7 +1123,8 @@ export default function OpsTriageCommandCenter() {
                 <div className="bg-[#111726] border border-slate-800/90 rounded-lg p-3.5 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-slate-400">
-                      Agent Execution Steps ({selectedInquiry.execution_trace.length}/5)
+                      Agent Execution Steps (
+                      {selectedInquiry.execution_trace.length}/5)
                     </span>
                     {selectedInquiry.triage_latency_ms && (
                       <span className="text-[11px] text-slate-500 flex items-center gap-1">
@@ -1091,12 +1154,15 @@ export default function OpsTriageCommandCenter() {
                           selectedInquiry.execution_trace.map((s) => [
                             s.step_number,
                             s,
-                          ])
-                        ).values()
+                          ]),
+                        ).values(),
                       ).map((step) => {
                         const open = Boolean(expandedSteps[step.step_number]);
                         return (
-                          <div key={`step-${selectedInquiry.id}-${step.step_number}`} className="py-2 first:pt-0 last:pb-0">
+                          <div
+                            key={`step-${selectedInquiry.id}-${step.step_number}`}
+                            className="py-2 first:pt-0 last:pb-0"
+                          >
                             <div
                               onClick={() =>
                                 setExpandedSteps((p) => ({
@@ -1197,7 +1263,9 @@ export default function OpsTriageCommandCenter() {
                   disabled={isRegenerating || !regenPrompt.trim()}
                   className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:opacity-40 text-xs font-medium text-white flex items-center gap-1.5 transition"
                 >
-                  <Wand2 className={`w-3.5 h-3.5 ${isRegenerating ? "animate-spin text-white" : "text-indigo-200"}`} />
+                  <Wand2
+                    className={`w-3.5 h-3.5 ${isRegenerating ? "animate-spin text-white" : "text-indigo-200"}`}
+                  />
                   {isRegenerating ? "Refining..." : "Refine"}
                 </button>
               </div>
@@ -1247,7 +1315,8 @@ export default function OpsTriageCommandCenter() {
                   OpsTriage Tracking Sheet Rows
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Every triaged email logs a row here; approving an email flips its status to Resolved.
+                  Every triaged email logs a row here; approving an email flips
+                  its status to Resolved.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -1290,7 +1359,8 @@ export default function OpsTriageCommandCenter() {
                         {row.organization}
                       </td>
                       <td className="py-2.5 px-3 text-slate-300">
-                        {row.intent_category} ({row.priority_tier.split(" - ")[0]})
+                        {row.intent_category} (
+                        {row.priority_tier.split(" - ")[0]})
                       </td>
                       <td className="py-2.5 px-3 font-mono text-slate-200">
                         {row.monetary_amount}
@@ -1336,10 +1406,15 @@ export default function OpsTriageCommandCenter() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateCustomInquiry} className="space-y-3 text-xs">
+            <form
+              onSubmit={handleCreateCustomInquiry}
+              className="space-y-3 text-xs"
+            >
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-slate-400 mb-1">Sender Name</label>
+                  <label className="block text-slate-400 mb-1">
+                    Sender Name
+                  </label>
                   <input
                     type="text"
                     required
@@ -1349,7 +1424,9 @@ export default function OpsTriageCommandCenter() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Organization</label>
+                  <label className="block text-slate-400 mb-1">
+                    Organization
+                  </label>
                   <input
                     type="text"
                     required
@@ -1360,7 +1437,9 @@ export default function OpsTriageCommandCenter() {
                 </div>
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Sender Email</label>
+                <label className="block text-slate-400 mb-1">
+                  Sender Email
+                </label>
                 <input
                   type="email"
                   required
@@ -1380,7 +1459,9 @@ export default function OpsTriageCommandCenter() {
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Message Body</label>
+                <label className="block text-slate-400 mb-1">
+                  Message Body
+                </label>
                 <textarea
                   rows={4}
                   required
@@ -1428,24 +1509,32 @@ export default function OpsTriageCommandCenter() {
             </div>
             <ol className="space-y-3 text-slate-300 list-decimal list-inside leading-relaxed">
               <li>
-                <strong className="text-white">Pick an Email (Left Panel):</strong>{" "}
-                Click any email marked <span className="text-amber-300">Untriaged</span>{" "}
-                (or click <strong>+ New Email</strong> to create your own).
+                <strong className="text-white">
+                  Pick an Email (Left Panel):
+                </strong>{" "}
+                Click any email marked{" "}
+                <span className="text-amber-300">Untriaged</span> (or click{" "}
+                <strong>+ New Email</strong> to create your own).
               </li>
               <li>
-                <strong className="text-white">Run AI Triage (Center Panel):</strong>{" "}
-                Click <strong>Run AI Triage</strong>. Watch the 5 steps complete live:
-                classifying priority, extracting dollar amounts/deadlines, matching a
-                Google Drive SOP, logging a Google Sheet row, and drafting a reply.
+                <strong className="text-white">
+                  Run AI Triage (Center Panel):
+                </strong>{" "}
+                Click <strong>Run AI Triage</strong>. Watch the 5 steps complete
+                live: classifying priority, extracting dollar amounts/deadlines,
+                matching a Google Drive SOP, logging a Google Sheet row, and
+                drafting a reply.
               </li>
               <li>
-                <strong className="text-white">Approve & Send (Right Panel):</strong>{" "}
+                <strong className="text-white">
+                  Approve & Send (Right Panel):
+                </strong>{" "}
                 Review or edit the drafted reply on the right, then click{" "}
                 <strong className="text-emerald-400">
                   Approve, Send Email & Mark Resolved
                 </strong>
-                . Click <strong>Tracking Sheet</strong> in the top bar to see the row
-                status flip to <em>Resolved</em>!
+                . Click <strong>Tracking Sheet</strong> in the top bar to see
+                the row status flip to <em>Resolved</em>!
               </li>
             </ol>
           </div>
@@ -1482,14 +1571,17 @@ export default function OpsTriageCommandCenter() {
 
             <div className="bg-slate-900/80 border border-slate-800 rounded-lg p-3 text-slate-300 space-y-2 leading-relaxed">
               <p>
-                Live Mode connects to real-time Gmail, Drive SOPs, and Google Sheets for:
+                Live Mode connects to real-time Gmail, Drive SOPs, and Google
+                Sheets for:
               </p>
               <div className="font-mono text-emerald-400 bg-black/40 px-2.5 py-1.5 rounded text-[11px] border border-emerald-500/20 flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{adminEmail}</span>
               </div>
               <p className="text-[11px] text-slate-400">
-                To protect private email security and prevent unintended inbox modifications on public portfolio deployments, Live OAuth is restricted strictly to the administrator.
+                To protect private email security and prevent unintended inbox
+                modifications on public portfolio deployments, Live OAuth is
+                restricted strictly to the administrator.
               </p>
             </div>
 
@@ -1506,12 +1598,16 @@ export default function OpsTriageCommandCenter() {
                 <span>Continue in Live Sandbox Mode (Recruiters)</span>
               </button>
               <p className="text-[10px] text-center text-slate-500">
-                Sandbox Mode provides 100% full interactive AI triage, SOP matching, and refinement without exposing personal accounts.
+                Sandbox Mode provides 100% full interactive AI triage, SOP
+                matching, and refinement without exposing personal accounts.
               </p>
             </div>
 
             {/* Admin verification form */}
-            <form onSubmit={handleAdminVerify} className="pt-3 border-t border-slate-800 space-y-2.5">
+            <form
+              onSubmit={handleAdminVerify}
+              className="pt-3 border-t border-slate-800 space-y-2.5"
+            >
               <label className="block text-[11px] font-medium text-slate-300">
                 Project Owner Passkey:
               </label>
@@ -1531,7 +1627,7 @@ export default function OpsTriageCommandCenter() {
                     setAdminPasskey(e.target.value);
                     if (adminPasskeyError) setAdminPasskeyError("");
                   }}
-                  placeholder="Enter passkey (default: admin123)..."
+                  placeholder="Enter passkey..."
                   className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
                 />
                 <button
