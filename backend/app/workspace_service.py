@@ -375,18 +375,21 @@ class WorkspaceService:
                         relevance_score=0.97,
                     )
                 )
-        if not matched:
-            top = SEED_SOP_DOCUMENTS[0]
-            matched.append(
-                SOPMatch(
-                    doc_id=top["doc_id"],
-                    title=top["title"],
-                    drive_url=top["drive_url"],
-                    matched_section=top["matched_section"],
-                    policy_excerpt=top["policy_excerpt"],
-                    relevance_score=0.89,
-                )
-            )
+        if not matched and intent_category.lower() != "general operations":
+            # Only match top enterprise SOP if specifically an enterprise category without direct title match
+            for doc in SEED_SOP_DOCUMENTS:
+                if any(w in query_terms.lower() for w in doc["category"].lower().split()):
+                    matched.append(
+                        SOPMatch(
+                            doc_id=doc["doc_id"],
+                            title=doc["title"],
+                            drive_url=doc["drive_url"],
+                            matched_section=doc["matched_section"],
+                            policy_excerpt=doc["policy_excerpt"],
+                            relevance_score=0.85,
+                        )
+                    )
+                    break
         return matched
 
     def seed_drive_sops_to_live_folder(self) -> List[Dict[str, str]]:

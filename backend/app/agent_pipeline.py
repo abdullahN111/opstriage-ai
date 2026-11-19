@@ -40,7 +40,7 @@ class OpsTriageAgentPipeline:
             try:
                 self._client = genai.Client(
                     api_key=settings.GEMINI_API_KEY,
-                    http_options={"timeout": 3},
+                    http_options={"timeout": 12},
                 )
             except Exception:
                 self._client = None
@@ -50,7 +50,7 @@ class OpsTriageAgentPipeline:
             try:
                 self._client = genai.Client(
                     api_key=settings.GEMINI_API_KEY,
-                    http_options={"timeout": 3},
+                    http_options={"timeout": 12},
                 )
             except Exception:
                 self._client = None
@@ -92,7 +92,7 @@ class OpsTriageAgentPipeline:
 
         try:
             future = _gemini_pool.submit(_do_structured)
-            return future.result(timeout=2.0)
+            return future.result(timeout=10.0)
         except Exception:
             return None
 
@@ -124,7 +124,7 @@ class OpsTriageAgentPipeline:
 
         try:
             future = _gemini_pool.submit(_do_text)
-            return future.result(timeout=2.0)
+            return future.result(timeout=10.0)
         except Exception:
             return None
 
@@ -454,6 +454,43 @@ class OpsTriageAgentPipeline:
 
         # High-precision heuristic fallback
         combined = f"{inquiry.subject} {inquiry.body}".lower()
+
+        # Check for transactional, automated notifications, orders, job alerts first
+        if any(
+            k in combined
+            for k in [
+                "order",
+                "daraz",
+                "delivery",
+                "shipping",
+                "internship",
+                "jobalert",
+                "job",
+                "career",
+                "hiring",
+                "newsletter",
+                "receipt",
+                "deal",
+                "campaign",
+                "offer",
+                "discount",
+                "winner",
+                "unsubscribe",
+                "batch-",
+                "sadapay",
+                "digiskills",
+                "jersey",
+                "noreply",
+                "no-reply",
+            ]
+        ):
+            return {
+                "intent_category": "General Operations",
+                "priority_tier": "P3 - Low",
+                "confidence_score": 0.97,
+                "rationale": "Transactional notification or standard communication. Handled as General Operations (Low Priority).",
+            }
+
         if any(k in combined for k in ["504", "502", "outage", "sla", "p0", "downtime", "timeout"]):
             return {
                 "intent_category": "SLA Escalation",
@@ -475,7 +512,7 @@ class OpsTriageAgentPipeline:
                 "confidence_score": 0.96,
                 "rationale": "Past-due Net-30 vendor invoice referencing an approved Purchase Order.",
             }
-        if any(k in combined for k in ["soc2", "gdpr", "dpa", "security", "nda", "ciso", "compliance"]):
+        if any(k in combined for k in ["soc2", "gdpr", "dpa", "ciso", "security questionnaire", "security attestation", "mutual nda"]):
             return {
                 "intent_category": "Compliance & Security",
                 "priority_tier": "P1 - High",
@@ -488,13 +525,6 @@ class OpsTriageAgentPipeline:
                 "priority_tier": "P2 - Medium",
                 "confidence_score": 0.95,
                 "rationale": "Contractor access provisioning and hardware stipend reimbursement request.",
-            }
-        if any(k in combined for k in ["winner", "campaign", "unsubscribe", "newsletter", "offer", "discount", "enrollment", "batch-", "sadapay", "digiskills", "jersey"]):
-            return {
-                "intent_category": "General Operations",
-                "priority_tier": "P3 - Low",
-                "confidence_score": 0.96,
-                "rationale": "Informational newsletter or community campaign. Categorized as Low Priority General Operations.",
             }
         return {
             "intent_category": "General Operations",
@@ -630,52 +660,71 @@ class OpsTriageAgentPipeline:
             else ""
         )
 
-        if inquiry.intent_category == "SLA Escalation":
+        if inquiry.intent_category == "SLA Escalation" and sop:
             return (
                 f"Hi {first_name},\n\n"
                 f"We have escalated Incident ({refs_str}) for {inquiry.organization} as P0 - Critical and verified "
-                f"the 27-minute US-East webhook gateway degradation.\n\n"
+                f"the service degradation.\n\n"
                 f"Per {sop_title} ({sop_sec}):\n"
-                f"1. 10% SLA Service Credit Approved: A credit of {amt_str} has been pre-authorized under MSA Clause 8.1 and applied to your next invoice cycle.\n"
-                f"2. Root Cause Analysis (RCA): Our Incident Commander is finalizing the full post-mortem and will deliver the report prior to your {deadline_str} deadline.\n"
-                f"3. OpsTriage Tracking: Logged in our Operations Sheet ({inquiry.tracking_row_id or 'ROW-LIVE'}).\n"
+                f"1. Service Credit: A credit adjustment of {amt_str} has been authorized and queued for your billing cycle.\n"
+                f"2. RCA: Our team is finalizing the post-mortem report before {deadline_str}.\n"
+                f"3. OpsTriage Tracking: Logged under Ledger Reference {inquiry.tracking_row_id or 'ROW-LIVE'}.\n"
                 f"{tone_note}\n"
                 f"Best regards,\n"
                 f"OpsTriage Autonomous Operations Team"
             )
-        if inquiry.intent_category == "Vendor Invoice":
+        if inquiry.intent_category == "Vendor Invoice" and sop:
             return (
                 f"Hi {first_name},\n\n"
                 f"Thank you for following up on {refs_str} for {inquiry.organization}.\n\n"
-                f"Per {sop_title} ({sop_sec}), we have completed 3-way PO verification for the {amt_str} balance:\n"
-                f"1. Expedited ACH Scheduled: Since this approved PO invoice is past due, we have queued {amt_str} for same-day priority ACH disbursement.\n"
-                f"2. Settlement Window: Funds and remittance advice will settle well ahead of your {deadline_str} audit cutoff.\n"
-                f"3. Tracking Reference: Recorded under OpsTriage Sheet {inquiry.tracking_row_id or 'ROW-LIVE'}.\n"
+                f"Per {sop_title} ({sop_sec}), we have completed 3-way PO verification for {amt_str}:\n"
+                f"1. ACH Disbursement: Queued for priority settlement ahead of {deadline_str}.\n"
+                f"2. Tracking Reference: Recorded under OpsTriage Sheet {inquiry.tracking_row_id or 'ROW-LIVE'}.\n"
                 f"{tone_note}\n"
                 f"Best regards,\n"
                 f"OpsTriage Autonomous Operations Team"
             )
-        if inquiry.intent_category == "Compliance & Security":
+        if inquiry.intent_category == "Compliance & Security" and sop:
             return (
                 f"Dear {inquiry.sender_name},\n\n"
-                f"Thank you for reaching out regarding {inquiry.organization}'s Enterprise procurement ({refs_str}).\n\n"
-                f"In accordance with {sop_title} ({sop_sec}) and your active Mutual NDA:\n"
-                f"1. SOC2 Type II Attestation: We have provisioned Trust Portal access for your DPO containing our latest SOC2 Type II report and penetration test executive summary.\n"
-                f"2. Countersigned GDPR DPA: Our standard Articles 28/32 Data Processing Addendum is countersigned and ready for release prior to {deadline_str}.\n"
-                f"3. Tracking Reference: Logged in OpsTriage Sheet ({inquiry.tracking_row_id or 'ROW-LIVE'}).\n"
+                f"Thank you for reaching out regarding {inquiry.organization}'s security procurement ({refs_str}).\n\n"
+                f"In accordance with {sop_title} ({sop_sec}):\n"
+                f"1. Security Package: Provisioned Trust Portal access containing latest attestation and DPA before {deadline_str}.\n"
+                f"2. Tracking Reference: Logged in OpsTriage Sheet ({inquiry.tracking_row_id or 'ROW-LIVE'}).\n"
                 f"{tone_note}\n"
                 f"Best regards,\n"
                 f"OpsTriage Autonomous Operations Team"
             )
 
+        # Context-aware general & transactional email acknowledgment
+        subj_lower = inquiry.subject.lower()
+        if any(w in subj_lower for w in ["order", "daraz", "confirmed", "delivery", "shipping"]):
+            order_num = ""
+            for num in re.findall(r"\b\d{10,20}\b", inquiry.subject):
+                order_num = f" (Order #{num})"
+                break
+            return (
+                f"Hi {first_name},\n\n"
+                f"Thank you for the order confirmation regarding \"{inquiry.subject}\"{order_num}.\n\n"
+                f"The order notification has been received and verified in our operations inbox. All details have been logged and no further action is required.\n\n"
+                f"{tone_note}"
+                f"Best regards,\n"
+                f"OpsTriage Autonomous Operations Team"
+            )
+        if any(w in subj_lower for w in ["internship", "job", "career", "hiring", "applicant"]):
+            return (
+                f"Hi {first_name},\n\n"
+                f"Thank you for reaching out regarding \"{inquiry.subject}\".\n\n"
+                f"We have noted the application and role requirements. The information has been logged in our operations queue for review.\n\n"
+                f"{tone_note}"
+                f"Best regards,\n"
+                f"OpsTriage Autonomous Operations Team"
+            )
         return (
             f"Hi {first_name},\n\n"
-            f"Thank you for contacting Operations regarding {inquiry.subject} ({refs_str}).\n\n"
-            f"We have reviewed your request for {inquiry.organization} ({amt_str}) against {sop_title} ({sop_sec}):\n"
-            f"- Policy Action: {sop.policy_excerpt if sop else 'Processed under standard SLA.'}\n"
-            f"- Target Completion: Scheduled to complete ahead of {deadline_str}.\n"
-            f"- OpsTriage Ledger Reference: {inquiry.tracking_row_id or 'ROW-LIVE'}.\n"
-            f"{tone_note}\n"
+            f"Thank you for contacting us regarding \"{inquiry.subject}\".\n\n"
+            f"We have received your email and routed it to our operations workflow under reference {inquiry.tracking_row_id or 'ROW-LIVE'}. Our team will review the details and follow up if any action is needed.\n\n"
+            f"{tone_note}"
             f"Best regards,\n"
             f"OpsTriage Autonomous Operations Team"
         )
@@ -684,17 +733,27 @@ class OpsTriageAgentPipeline:
         self, base_draft: str, instructions: str, inquiry: InboundInquiry
     ) -> str:
         inst_lower = instructions.lower()
-        lines = [l for l in base_draft.split("\n") if l.strip()]
+        lines = [l.strip() for l in base_draft.split("\n") if l.strip()]
 
-        # 1. Shorten / concise request
+        first_line = lines[0] if lines else f"Hi {inquiry.sender_name},"
+        closing_lines = []
+        content_lines = []
+        is_closing = False
+        for l in lines[1:]:
+            if any(c in l.lower() for c in ["best regards", "sincerely", "regards", "opstriage autonomous"]):
+                is_closing = True
+            if is_closing:
+                closing_lines.append(l)
+            else:
+                content_lines.append(l)
+
+        # 1. Shorten / concise request: genuinely shorten the actual draft without canned text
         if any(k in inst_lower for k in ["short", "concise", "brief", "summarize", "bullet"]):
             first_name = inquiry.sender_name.split()[0] if inquiry.sender_name else "there"
-            amt = f"${inquiry.entities.monetary_amount:,.2f}" if (inquiry.entities and inquiry.entities.monetary_amount) else "the requested amount"
+            short_body = " ".join(content_lines[:2]) if content_lines else f"We have received and logged your email regarding \"{inquiry.subject}\"."
             return (
                 f"Hi {first_name},\n\n"
-                f"Regarding {inquiry.subject}: we have reviewed your inquiry and authorized the processing of {amt}. "
-                f"Our operations team is handling this under standard SLA with priority resolution. "
-                f"OpsTriage Ledger Reference: {inquiry.tracking_row_id or 'ROW-REF'}.\n\n"
+                f"{short_body}\n\n"
                 f"Best regards,\n"
                 f"OpsTriage Autonomous Operations Team"
             )
@@ -702,17 +761,17 @@ class OpsTriageAgentPipeline:
         # 2. Tone mod: Apology / Empathy
         apology_phrase = ""
         if any(k in inst_lower for k in ["apolog", "sorry", "empath", "regret", "pardon"]):
-            apology_phrase = "Please accept our sincere apologies for the disruption and frustration this situation has caused. "
+            apology_phrase = "Please accept our sincere apologies for any disruption or delay this situation may have caused."
 
         # 3. Tone mod: Friendlier / Warm
         friendly_intro = ""
         if any(k in inst_lower for k in ["friendly", "warm", "casual", "kinder"]):
-            friendly_intro = "Hope you are having a wonderful week! "
+            friendly_intro = "Hope you are having a wonderful day!"
 
         # 4. Tone mod: Formal / Legal
         salutation_mod = None
         if any(k in inst_lower for k in ["formal", "strict", "legal", "executive", "professional"]):
-            salutation_mod = f"Dear {inquiry.sender_name or 'Valued Partner'},"
+            salutation_mod = f"Dear {inquiry.sender_name or 'Sir/Madam'},"
 
         # 5. Specific requested clauses (discounts, credits, phone calls, receipts)
         extra_clauses = []
@@ -724,39 +783,27 @@ class OpsTriageAgentPipeline:
         if any(k in inst_lower for k in ["document", "receipt", "screenshot", "attach", "proof", "invoice"]):
             extra_clauses.append("Please provide any supporting receipts or screenshots at your earliest convenience to expedite final clearance.")
 
-        # Reconstruct body
-        first_line = lines[0] if lines else f"Hi {inquiry.sender_name},"
+        # Reconstruct body naturally
         if salutation_mod:
             first_line = salutation_mod
 
-        body_lines = lines[1:] if len(lines) > 1 else []
-        closing_lines = []
-        content_lines = []
-        is_closing = False
-        for l in body_lines:
-            if any(c in l.lower() for c in ["best regards", "sincerely", "regards", "opstriage autonomous"]):
-                is_closing = True
-            if is_closing:
-                closing_lines.append(l)
-            else:
-                content_lines.append(l)
-
-        content_text = "\n\n".join(content_lines).strip()
-        prefix = f"{apology_phrase}{friendly_intro}".strip()
-        if prefix:
-            content_text = f"{prefix}\n\n{content_text}"
-
+        assembled_paragraphs = []
+        if apology_phrase:
+            assembled_paragraphs.append(apology_phrase)
+        if friendly_intro:
+            assembled_paragraphs.append(friendly_intro)
+        if content_lines:
+            assembled_paragraphs.append("\n\n".join(content_lines))
         if extra_clauses:
-            content_text = f"{content_text}\n\n" + "\n\n".join(extra_clauses)
-        elif not prefix and not salutation_mod:
+            assembled_paragraphs.extend(extra_clauses)
+        elif not apology_phrase and not friendly_intro and not salutation_mod:
+            # Custom instruction incorporation
             clean_instruction = instructions.strip().rstrip(".")
-            content_text = f"{content_text}\n\n(Updated per reviewer instruction: incorporated requirement regarding \"{clean_instruction}\".)"
+            assembled_paragraphs.append(f"Note: Incorporated update regarding {clean_instruction}.")
 
-        closing = "\n".join(closing_lines).strip()
-        if not closing:
-            closing = "Best regards,\nOpsTriage Autonomous Operations Team"
-
-        return f"{first_line}\n\n{content_text}\n\n{closing}"
+        closing = "\n".join(closing_lines) if closing_lines else "Best regards,\nOpsTriage Autonomous Operations Team"
+        body_content = "\n\n".join(assembled_paragraphs).strip()
+        return f"{first_line}\n\n{body_content}\n\n{closing}"
 
     def regenerate_draft(
         self,

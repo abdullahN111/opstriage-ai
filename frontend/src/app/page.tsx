@@ -1105,7 +1105,7 @@ export default function OpsTriageCommandCenter() {
                       </div>
                     </div>
 
-                    {selectedInquiry.matched_sops[0] && (
+                    {selectedInquiry.matched_sops[0] ? (
                       <div className="pt-2.5 border-t border-slate-800/80 text-xs">
                         <div className="flex items-center justify-between text-sky-400 font-medium mb-1">
                           <span>
@@ -1123,6 +1123,11 @@ export default function OpsTriageCommandCenter() {
                         <p className="text-slate-400 text-[11px] leading-relaxed">
                           {selectedInquiry.matched_sops[0].policy_excerpt}
                         </p>
+                      </div>
+                    ) : (
+                      <div className="pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-500 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Standard Operational Inbound (No external Drive SOP required)</span>
                       </div>
                     )}
                   </div>
