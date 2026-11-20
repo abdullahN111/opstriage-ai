@@ -59,50 +59,91 @@ class OpsTriageAgentPipeline:
     def _call_gemini_structured(
         self, prompt: str, json_schema: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
+        # 1. Direct resilient HTTP REST call (bypasses HTTP/2 SSL handshake timeouts)
+        if settings.GEMINI_API_KEY:
+            try:
+                import urllib.request
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={settings.GEMINI_API_KEY}"
+                payload = json.dumps({
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"responseMimeType": "application/json"}
+                }).encode("utf-8")
+                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"[Gemini REST API] Structured response success via {self.model}")
+                    return json.loads(text)
+            except Exception as exc:
+                print(f"[Gemini REST Note] {exc}, attempting SDK client...")
+
         client = self._get_client()
         if not client:
             return None
 
         def _do_structured() -> Optional[Dict[str, Any]]:
             try:
-                res = client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config={"response_mime_type": "application/json"},
-                )
-                if res and res.text:
-                    return json.loads(res.text)
-            except Exception:
-                return None
+                if hasattr(client, "models"):
+                    res = client.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                        config={"response_mime_type": "application/json"},
+                    )
+                    if res and res.text:
+                        print(f"[Gemini SDK API] Structured generate_content success via {self.model}")
+                        return json.loads(res.text)
+            except Exception as exc:
+                print(f"[Gemini SDK Error] generate_content failed: {exc}")
             return None
 
         try:
             future = _gemini_pool.submit(_do_structured)
-            return future.result(timeout=10.0)
-        except Exception:
+            return future.result(timeout=20.0)
+        except Exception as exc:
+            print(f"[Gemini Pool Timeout] Structured call timed out: {exc}")
             return None
 
     def _call_gemini_text(self, prompt: str) -> Optional[str]:
+        # 1. Direct resilient HTTP REST call (bypasses HTTP/2 SSL handshake timeouts)
+        if settings.GEMINI_API_KEY:
+            try:
+                import urllib.request
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={settings.GEMINI_API_KEY}"
+                payload = json.dumps({
+                    "contents": [{"parts": [{"text": prompt}]}]
+                }).encode("utf-8")
+                req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"[Gemini REST API] Text response success via {self.model}")
+                    return text.strip()
+            except Exception as exc:
+                print(f"[Gemini REST Note] {exc}, attempting SDK client...")
+
         client = self._get_client()
         if not client:
             return None
 
         def _do_text() -> Optional[str]:
             try:
-                res = client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                )
-                if res and res.text:
-                    return res.text.strip()
-            except Exception:
-                return None
+                if hasattr(client, "models"):
+                    res = client.models.generate_content(
+                        model=self.model,
+                        contents=prompt,
+                    )
+                    if res and res.text:
+                        print(f"[Gemini SDK API] Text generate_content success via {self.model}")
+                        return res.text.strip()
+            except Exception as exc:
+                print(f"[Gemini SDK Error] generate_content failed: {exc}")
             return None
 
         try:
             future = _gemini_pool.submit(_do_text)
-            return future.result(timeout=10.0)
-        except Exception:
+            return future.result(timeout=20.0)
+        except Exception as exc:
+            print(f"[Gemini Pool Timeout] Text call timed out: {exc}")
             return None
 
     async def stream_triage_execution(
@@ -591,27 +632,37 @@ class OpsTriageAgentPipeline:
         sop: Optional[SOPMatch],
         custom_instructions: Optional[str] = None,
     ) -> str:
-        sop_block = (
-            f"Matched SOP Document: {sop.title}\n"
-            f"Section: {sop.matched_section}\n"
-            f"Policy Excerpt: {sop.policy_excerpt}\n"
-            if sop
-            else "No specific SOP matched; follow standard professional operations SLA."
-        )
+        if sop:
+            sop_block = (
+                f"Matched SOP Document: {sop.title}\n"
+                f"Section: {sop.matched_section}\n"
+                f"Policy Excerpt: {sop.policy_excerpt}\n"
+            )
+            guidance_instruction = (
+                "Ground the response in the matched Google Drive SOP policy above. Cite the SOP title and relevant section naturally. "
+                "Address any extracted amounts, reference IDs, and deadlines."
+            )
+        else:
+            sop_block = "No internal SOP required. This is a standard or non-enterprise operational message."
+            guidance_instruction = (
+                "No internal SOP applies. Draft a natural, context-aware, helpful, and professional response "
+                "directly addressing the sender's subject and email content. Do NOT invent invoice numbers, ACH payments, or policy citations."
+            )
+
         instruction_line = (
-            f"\nAdditional Human Reviewer Instructions: {custom_instructions}\n"
+            f"\nAdditional Reviewer Instructions: {custom_instructions}\n"
             if custom_instructions
             else ""
         )
         prompt = (
-            "You are the OpsTriage AI Operations Responder. Draft a concise, ready-to-send email reply "
-            "grounded strictly in the matched Google Drive SOP policy below. Cite the SOP title and section explicitly, "
-            "address all extracted amounts, reference IDs, and deadlines, and sign off as 'OpsTriage Autonomous Operations Team'.\n\n"
+            "You are the OpsTriage AI Operations Responder. Draft a concise, professional, ready-to-send email reply.\n"
+            f"{guidance_instruction}\n"
+            "Sign off as 'OpsTriage Autonomous Operations Team'. Output ONLY the reply email text.\n\n"
             f"--- INBOUND EMAIL ---\n"
             f"From: {inquiry.sender_name} <{inquiry.sender_email}> ({inquiry.organization})\n"
             f"Subject: {inquiry.subject}\n"
             f"Body:\n{inquiry.body}\n\n"
-            f"--- MATCHED GOOGLE DRIVE SOP ---\n"
+            f"--- POLICY CONTEXT ---\n"
             f"{sop_block}"
             f"{instruction_line}"
         )
@@ -849,11 +900,15 @@ class OpsTriageAgentPipeline:
 
     def summarize_inquiry(self, inquiry: InboundInquiry) -> str:
         prompt = (
-            "Explain and summarize the following email in a single, clear, easy-to-read paragraph (2-3 sentences max). "
-            "Write in natural, straightforward English explaining who is writing, what they need, any critical amounts or deadlines, and the next action.\n\n"
+            "You are an executive operations analyst. Read the following incoming email carefully. "
+            "Provide a concise, 2-to-3 sentence summary in a single clear paragraph explaining: "
+            "1) Who sent the email and the core message, "
+            "2) The main request, update, or action mentioned, "
+            "3) Recommended operational handling or next step.\n\n"
             f"Subject: {inquiry.subject}\n"
-            f"From: {inquiry.sender_name} ({inquiry.organization})\n"
-            f"Body:\n{inquiry.body[:900]}\n"
+            f"From: {inquiry.sender_name} <{inquiry.sender_email}> ({inquiry.organization})\n"
+            f"Body:\n{inquiry.body[:1800]}\n\n"
+            "Write in natural, objective English. Output ONLY the summary paragraph without bullet points or headers."
         )
         summary = self._call_gemini_text(prompt)
         if summary:
@@ -863,11 +918,20 @@ class OpsTriageAgentPipeline:
         # Instant natural paragraph fallback
         combined = f"{inquiry.subject} {inquiry.body}".lower()
         sec_codes = re.findall(r"\b\d{4,8}\b", inquiry.subject + " " + inquiry.body)
-        if sec_codes or any(k in combined for k in ["security code", "verification code", "otp", "confirm action"]):
-            code_num = sec_codes[0] if sec_codes else "verification"
+        has_security_intent = any(k in combined for k in ["security code", "verification code", "one-time", "otp", "confirm action", "login code", "confirm code"])
+        if has_security_intent and sec_codes:
+            code_num = sec_codes[0]
             fallback = (
                 f"{inquiry.sender_name or 'The service'} sent a one-time security confirmation code ({code_num}) for account authentication. "
                 f"The verification code carries a short expiration window (5 minutes) and is intended for immediate administrative confirmation."
+            )
+            inquiry.ai_summary = fallback
+            return fallback
+
+        if any(k in combined for k in ["english", "fluent", "course", "academy", "lesson", "student", "teacher", "coach", "enrol", "program"]):
+            fallback = (
+                f"{inquiry.sender_name or 'The sender'} shared an educational update and program overview regarding \"{inquiry.subject}\". "
+                f"The email outlines learning resources, curriculum benefits, and enrollment links. No operational escalation is required, and the message has been filed under informational reference."
             )
             inquiry.ai_summary = fallback
             return fallback
