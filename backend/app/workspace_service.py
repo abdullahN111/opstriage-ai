@@ -1,12 +1,16 @@
 import base64
 import html
 import json
+import os
 import re
 import threading
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+
+# Allow Google OAuth to return expanded scopes (e.g. openid, email) without raising ScopeChanged exception
+os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
 
 from .config import settings
 from .models import (
